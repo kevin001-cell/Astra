@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; media-src 'self' blob:; style-src 'self'; script-src 'self'; connect-src 'none'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Astra Desktop</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="titlebar">
+        <div class="brand">
+          <span class="brand-mark">A</span>
+          <div>
+            <strong>ASTRA</strong>
+            <span id="connectionStatus">离线模式</span>
+          </div>
+        </div>
+        <div class="window-actions">
+          <button id="miniModeButton" class="icon-button" title="切换迷你桌宠">◌</button>
+          <button id="clickThroughButton" class="icon-button" title="鼠标穿透">◇</button>
+          <button id="plannerButton" class="icon-button" title="计划中心">▣</button>
+          <button id="focusButton" class="icon-button" title="专注陪伴">◷</button>
+          <button id="companionButton" class="icon-button" title="陪伴中心">♡</button>
+          <button id="memoryButton" class="icon-button" title="本地记忆">◈</button>
+          <button id="intelligenceButton" class="icon-button" title="本地智能中心">◆</button>
+          <button id="settingsButton" class="icon-button" title="设置">⚙</button>
+          <button id="minimizeButton" class="icon-button" title="隐藏">—</button>
+          <button id="closeButton" class="icon-button close" title="关闭">×</button>
+        </div>
+      </header>
+
+      <section class="assistant-stage" aria-label="Astra 桌宠">
+        <div class="ambient-grid"></div>
+        <div class="orbit orbit-one"><i></i></div>
+        <div class="orbit orbit-two"><i></i></div>
+        <div id="avatar" class="avatar idle" tabindex="0" role="button" aria-label="Astra 桌宠；右键打开快捷轮盘，双击迷你桌宠恢复完整界面">
+          <div class="halo halo-back"></div>
+          <div class="armor-backplate"></div>
+          <div class="avatar-head">
+            <div class="helmet-crown"></div>
+            <div class="helmet-temple helmet-temple-left"></div>
+            <div class="helmet-temple helmet-temple-right"></div>
+            <div class="face-line face-line-left"></div>
+            <div class="face-line face-line-right"></div>
+            <div class="faceplate">
+              <div class="eyes"><span></span><span></span></div>
+              <div class="face-bridge"></div>
+              <div class="jaw-panel"></div>
+              <div class="mouth"><i></i><i></i><i></i><i></i><i></i></div>
+            </div>
+          </div>
+          <div class="neck"><i></i><i></i></div>
+          <div class="shoulders">
+            <div class="collar collar-left"></div>
+            <div class="collar collar-right"></div>
+            <div class="chest-panel"></div>
+            <div class="shoulder-plate shoulder-plate-left"></div>
+            <div class="shoulder-plate shoulder-plate-right"></div>
+          </div>
+          <div class="core"><span></span><i></i></div>
+          <div class="thruster thruster-left"></div>
+          <div class="thruster thruster-right"></div>
+          <div class="scan-line"></div>
+        </div>
+        <div id="interactionCue" class="interaction-cue hidden" aria-hidden="true"><span></span></div>
+        <div id="companionBubble" class="companion-bubble hidden" role="status" aria-live="polite"></div>
+        <nav id="quickWheel" class="quick-wheel hidden" aria-label="桌宠快捷轮盘">
+          <button type="button" data-wheel-action="chat" title="完整对话"><b>对话</b><span>⌁</span></button>
+          <button type="button" data-wheel-action="voice" title="语音输入"><b>语音</b><span>◉</span></button>
+          <button type="button" data-wheel-action="screenshot" title="屏幕截图"><b>截图</b><span>▣</span></button>
+          <button type="button" data-wheel-action="reminder" title="添加提醒"><b>提醒</b><span>◷</span></button>
+          <button type="button" data-wheel-action="focus" title="专注陪伴"><b>专注</b><span>◎</span></button>
+          <button type="button" data-wheel-action="clickthrough" title="鼠标穿透"><b>穿透</b><span>◇</span></button>
+          <button type="button" data-wheel-action="mini" title="切换迷你模式"><b>迷你</b><span>◌</span></button>
+          <button type="button" data-wheel-action="hide" title="完全隐藏"><b>隐藏</b><span>—</span></button>
+          <i>ASTRA</i>
+        </nav>
+        <div class="status-chip"><span id="statusDot"></span><b id="assistantState">随时待命</b></div>
+      </section>
+
+      <section class="quick-actions" aria-label="快捷工具">
+        <button data-tool="browser"><span>◎</span>浏览器</button>
+        <button data-tool="notepad"><span>▤</span>记事本</button>
+        <button data-tool="calculator"><span>⌗</span>计算器</button>
+        <button data-tool="downloads"><span>⇩</span>下载目录</button>
+        <button id="appsButton"><span>▦</span>应用</button>
+        <button id="skillsButton"><span>✦</span>技能</button>
+      </section>
+
+      <section class="chat-panel">
+        <div id="messages" class="messages" aria-live="polite">
+          <article class="message assistant">
+            <div class="message-name">ASTRA</div>
+            <p>系统已上线。你可以和我聊天、管理计划，或让我打开常用工具。</p>
+          </article>
+        </div>
+        <div id="imagePreviewList" class="image-preview-list hidden"></div>
+        <form id="chatForm" class="composer">
+          <button id="imageButton" class="composer-button" type="button" title="选择图片">＋</button>
+          <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden />
+          <button id="micButton" class="composer-button" type="button" title="按住说话，松开发送" aria-label="按住说话">◉</button>
+          <textarea id="messageInput" rows="1" autocomplete="off" maxlength="8000" placeholder="输入消息，或按 / 查看快捷指令…"></textarea>
+          <div class="composer-actions">
+            <button id="stopGenerationButton" class="stop-button hidden" type="button" title="停止生成">■</button>
+            <button id="sendButton" class="send-button" type="submit" title="发送">➤</button>
+          </div>
+        </form>
+        <div id="commandPalette" class="command-palette hidden" role="listbox" aria-label="本地快捷指令"></div>
+        <div class="command-hint">
+          <div class="voice-mode-row"><span id="voiceInputHint">按住麦克风说话，松开后自动识别</span><button id="realtimeButton" type="button">开始实时通话</button></div>
+          <span id="restoreShortcutHint">恢复操作：<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Space</kbd>，或托盘“显示并恢复操作”</span>
+        </div>
+        <audio id="realtimeAudio" autoplay></audio>
+      </section>
+    </main>
+
+    <div id="focusOverlay" class="overlay hidden">
+      <section class="settings-card focus-card" role="dialog" aria-modal="true" aria-labelledby="focusTitle">
+        <header><div><span class="eyebrow">FOCUS</span><h2 id="focusTitle">专注陪伴</h2></div><button id="focusCloseButton" class="icon-button">×</button></header>
+        <div id="focusClock" class="focus-clock">25:00</div>
+        <div class="companion-select-grid"><label><span>专注分钟</span><input id="focusMinutesInput" type="number" min="1" max="180" value="25" /></label><label><span>休息分钟</span><input id="breakMinutesInput" type="number" min="1" max="180" value="5" /></label></div>
+        <label class="toggle-row"><span><b>喝水提醒</b><small>仅保存本地设置</small></span><input id="waterEnabledInput" type="checkbox" checked /></label>
+        <div class="focus-actions"><button id="startFocusButton" type="button">开始专注</button><button id="startBreakButton" type="button">开始休息</button><button id="stopFocusButton" type="button">停止</button></div>
+        <div id="focusHistory" class="focus-history"></div>
+        <button id="clearFocusButton" class="secondary-button" type="button">清空专注记录</button>
+      </section>
+    </div>
+
+    <div id="intelligenceOverlay" class="overlay hidden">
+      <section class="settings-card intelligence-card" role="dialog" aria-modal="true" aria-labelledby="intelligenceTitle">
+        <header><div><span class="eyebrow">LOCAL INTELLIGENCE</span><h2 id="intelligenceTitle">本地智能中心</h2></div><button id="intelligenceCloseButton" class="icon-button">×</button></header>
+        <p class="panel-copy">所有运行时和模型都由你主动选择。Astra 只使用固定参数启动本地程序，不向模型开放 Shell、脚本或任意电脑操作。</p>
+
+        <div class="model-deployment-entry"><span><b>不知道 GGUF 在哪里？</b><small>使用可信模型清单自动下载、校验并完成配置</small></span><button id="openModelDeploymentButton" type="button">模型部署助手</button></div>
+        <section id="modelDeploymentPanel" class="intelligence-section model-deployment-panel hidden">
+          <div class="planner-section-heading"><span><b>本地模型部署助手</b><small id="modelDeploymentSummary">正在检测电脑配置…</small></span><button id="dismissModelDeploymentButton" type="button">以后再说</button></div>
+          <div id="modelCatalog" class="model-catalog"></div>
+          <div id="modelDownloadPanel" class="model-download-panel hidden">
+            <div class="model-progress-heading"><span id="modelDownloadStatus">等待下载</span><span id="modelDownloadPercent">0%</span></div>
+            <progress id="modelDownloadProgress" max="100" value="0"></progress>
+            <div class="focus-actions"><button id="pauseModelDownloadButton" type="button">暂停</button><button id="resumeModelDownloadButton" type="button">继续</button><button id="cancelModelDownloadButton" type="button">取消</button></div>
+          </div>
+          <div class="model-manager-actions"><button id="inspectLocalModelButton" type="button">检查当前模型</button><button id="openModelDirectoryButton" type="button">打开模型目录</button><button id="deleteManagedModelButton" type="button">删除已选模型</button></div>
+          <div id="modelInspectionResult" class="model-inspection-result">只允许可信清单中的 HTTPS 下载；下载文件必须通过 SHA256 校验。</div>
+        </section>
+
+        <form id="localAiForm" class="intelligence-section">
+          <div class="planner-section-heading"><span><b>本地离线对话与图片理解</b><small id="localAiStatus">尚未配置</small></span></div>
+          <label class="toggle-row"><span><b>启用本地模型</b><small>在线服务不可用时自动回退到本地</small></span><input id="localAiEnabledInput" type="checkbox" /></label>
+          <div class="companion-select-grid">
+            <label><span>对话后端</span><select id="localAiModeInput"><option value="auto">自动选择</option><option value="online">仅在线</option><option value="local">仅本地</option><option value="rules">仅基础规则</option></select></label>
+            <label><span>性能档位</span><select id="localAiProfileInput"></select></label>
+            <label><span>CPU 线程</span><input id="localAiThreadsInput" type="number" min="1" max="32" value="4" /></label>
+            <label><span>GPU 层数</span><input id="localAiGpuInput" type="number" min="0" max="999" value="0" /></label>
+          </div>
+          <div class="runtime-picker"><input id="localAiRuntimeInput" readonly placeholder="选择 llama-server.exe" /><button id="selectLocalAiRuntimeButton" type="button">选择运行时</button></div>
+          <div class="runtime-picker"><input id="localAiModelInput" readonly placeholder="选择 GGUF 对话模型" /><button id="selectLocalAiModelButton" type="button">选择模型</button></div>
+          <div class="runtime-picker"><input id="localAiMmprojInput" readonly placeholder="可选：选择 mmproj GGUF 以启用图片理解" /><button id="selectLocalAiMmprojButton" type="button">选择 mmproj</button></div>
+          <div class="focus-actions"><button type="submit">保存配置</button><button id="startLocalAiButton" type="button">启动本地模型</button><button id="stopLocalAiButton" type="button">停止模型</button></div>
+          <div id="localAiRuntimeDetails" class="model-inspection-result">模型尚未启动。</div>
+        </form>
+
+        <form id="offlineVoiceForm" class="intelligence-section">
+          <div class="planner-section-heading"><span><b>完全离线语音</b><small id="offlineVoiceStatus">使用 whisper.cpp，本地录音不会上传</small></span></div>
+          <label class="toggle-row"><span><b>启用本地语音识别</b><small>未配置在线转写时优先使用本地 Whisper</small></span><input id="offlineVoiceEnabledInput" type="checkbox" /></label>
+          <div class="runtime-picker"><input id="offlineVoiceRuntimeInput" readonly placeholder="选择 whisper-cli.exe" /><button id="selectOfflineVoiceRuntimeButton" type="button">选择运行时</button></div>
+          <div class="runtime-picker"><input id="offlineVoiceModelInput" readonly placeholder="选择 ggml-*.bin 模型" /><button id="selectOfflineVoiceModelButton" type="button">选择模型</button></div>
+          <button class="secondary-button" type="submit">保存离线语音配置</button>
+        </form>
+
+        <section class="intelligence-section">
+          <div class="planner-section-heading"><span><b>本地知识库</b><small>仅支持主动导入的 TXT、Markdown、CSV、JSON 和日志文件</small></span><span><button id="importKnowledgeButton" type="button">导入</button><button id="clearKnowledgeButton" type="button">清空</button></span></div>
+          <div class="knowledge-search-row"><input id="knowledgeSearchInput" maxlength="500" placeholder="测试搜索本地知识库…" /><button id="knowledgeSearchButton" type="button">搜索</button></div>
+          <div id="knowledgeList" class="knowledge-list"></div>
+          <div id="knowledgeResults" class="knowledge-results"></div>
+        </section>
+
+        <section class="intelligence-section">
+          <div class="planner-section-heading"><span><b>情景模式</b><small>只改变本地通知、语音、动画和显示方式</small></span></div>
+          <div class="scenario-row"><select id="scenarioSelect"></select><button id="applyScenarioButton" type="button">应用</button></div>
+          <label class="toggle-row"><span><b>按本地时间自动切换</b><small>09:00 工作、18:00 休闲、23:00 睡眠</small></span><input id="scenarioAutomaticInput" type="checkbox" /></label>
+          <button id="saveScenarioButton" class="secondary-button" type="button">保存情景设置</button>
+        </section>
+
+        <form id="workflowForm" class="intelligence-section">
+          <div class="planner-section-heading"><span><b>白名单工作流</b><small>最多 8 步，只能组合固定安全动作</small></span></div>
+          <input id="workflowNameInput" maxlength="60" placeholder="例如：开始工作" />
+          <div class="companion-select-grid"><label><span>第一步</span><select id="workflowActionOne"></select></label><label><span>第二步（可选）</span><select id="workflowActionTwo"></select></label><label><span>第三步（可选）</span><select id="workflowActionThree"></select></label><label><span>第四步（可选）</span><select id="workflowActionFour"></select></label></div>
+          <label class="toggle-row"><span><b>执行前确认</b><small>显示完整动作清单后再运行</small></span><input id="workflowConfirmInput" type="checkbox" checked /></label>
+          <button class="secondary-button" type="submit">保存工作流</button>
+          <div id="workflowList" class="workflow-list"></div>
+        </form>
+      </section>
+    </div>
+
+    <div id="appsOverlay" class="overlay hidden">
+      <section class="settings-card app-launcher-card" role="dialog" aria-modal="true" aria-labelledby="appsTitle">
+        <header>
+          <div>
+            <span class="eyebrow">ALLOWLIST</span>
+            <h2 id="appsTitle">允许打开的应用</h2>
+          </div>
+          <button id="appsCloseButton" class="icon-button">×</button>
+        </header>
+        <p class="panel-copy">自动检测微信、QQ 和 VS Code。也可以手动选择其他可信的 EXE。</p>
+        <div id="appList" class="app-list"></div>
+        <button id="addAppButton" class="secondary-button" type="button">＋ 添加应用到白名单</button>
+        <div class="security-note">Astra 只能启动这里列出的程序，并且不会向应用附加模型生成的命令行参数。</div>
+      </section>
+    </div>
+
+    <div id="skillsOverlay" class="overlay hidden">
+      <section class="settings-card skill-center-card" role="dialog" aria-modal="true" aria-labelledby="skillsTitle">
+        <header>
+          <div>
+            <span class="eyebrow">SKILLS</span>
+            <h2 id="skillsTitle">技能中心</h2>
+          </div>
+          <button id="skillsCloseButton" class="icon-button">×</button>
+        </header>
+        <p class="panel-copy">所有电脑操作都来自固定白名单，不会执行模型生成的 Shell 命令。</p>
+        <div id="skillList" class="skill-list"></div>
+        <div class="skill-actions-grid">
+          <button id="screenshotSkillButton" type="button"><b>屏幕截图</b><small>保存当前屏幕</small></button>
+          <button id="clipboardSkillButton" type="button"><b>读取剪贴板</b><small>仅读取文本</small></button>
+        </div>
+        <section class="skill-tool-card">
+          <div class="skill-tool-heading"><b>系统音量</b><span id="volumeStatus">等待读取</span></div>
+          <div class="volume-controls">
+            <button id="volumeDownButton" type="button">−10</button>
+            <button id="volumeMuteButton" type="button">静音</button>
+            <button id="volumeUpButton" type="button">＋10</button>
+          </div>
+        </section>
+        <form id="fileSearchForm" class="skill-search-form">
+          <input id="fileSearchInput" maxlength="80" placeholder="搜索桌面、文档和下载目录…" />
+          <button type="submit">搜索文件</button>
+        </form>
+        <div id="skillResults" class="skill-results">可以说“截图”“把音量调到 30”或“搜索文件 报告”。</div>
+        <section class="skill-history-card">
+          <div class="skill-tool-heading"><b>待处理提醒与最近执行</b><button id="refreshSkillsButton" type="button">刷新</button></div>
+          <div id="skillHistory" class="skill-history"></div>
+        </section>
+      </section>
+    </div>
+
+    <div id="memoryOverlay" class="overlay hidden">
+      <section class="settings-card memory-center-card" role="dialog" aria-modal="true" aria-labelledby="memoryTitle">
+        <header>
+          <div>
+            <span class="eyebrow">LOCAL MEMORY</span>
+            <h2 id="memoryTitle">记忆与人格</h2>
+          </div>
+          <button id="memoryCloseButton" class="icon-button">×</button>
+        </header>
+        <p class="panel-copy">只保存你明确要求 Astra 记住的内容。所有数据仅存放在这台电脑，可随时编辑或删除。</p>
+        <form id="memoryProfileForm" class="memory-profile-form">
+          <label>
+            <span>怎么称呼你</span>
+            <input id="memoryDisplayNameInput" maxlength="40" placeholder="例如：托尼" />
+          </label>
+          <div class="memory-profile-grid">
+            <label>
+              <span>人格模式</span>
+              <select id="memoryPersonalityInput">
+                <option value="jarvis">沉着管家</option>
+                <option value="warm">温暖伙伴</option>
+                <option value="professional">专业助理</option>
+              </select>
+            </label>
+            <label>
+              <span>回答风格</span>
+              <select id="memoryResponseStyleInput">
+                <option value="concise">简洁</option>
+                <option value="balanced">均衡</option>
+                <option value="detailed">详细</option>
+              </select>
+            </label>
+          </div>
+          <button class="secondary-button" type="submit">保存称呼与人格</button>
+        </form>
+        <form id="memoryAddForm" class="memory-add-form">
+          <input id="memoryAddInput" maxlength="500" placeholder="输入你明确希望 Astra 记住的内容…" />
+          <select id="memoryCategoryInput">
+            <option value="general">一般</option>
+            <option value="preference">偏好</option>
+            <option value="habit">习惯</option>
+            <option value="context">背景</option>
+          </select>
+          <button type="submit">添加</button>
+        </form>
+        <div class="memory-list-heading">
+          <span><b>已保存记忆</b><small id="memoryCount">0 / 100</small></span>
+          <button id="clearMemoryButton" type="button">清空全部</button>
+        </div>
+        <div id="memoryList" class="memory-list"></div>
+        <div class="security-note">密码、API Key、验证码、银行卡和证件信息会被拒绝保存；聊天内容不会自动进入记忆。</div>
+      </section>
+    </div>
+
+    <div id="plannerOverlay" class="overlay hidden">
+      <section class="settings-card planner-center-card" role="dialog" aria-modal="true" aria-labelledby="plannerTitle">
+        <header>
+          <div>
+            <span class="eyebrow">LOCAL PLANNER</span>
+            <h2 id="plannerTitle">计划与主动助手</h2>
+          </div>
+          <button id="plannerCloseButton" class="icon-button">×</button>
+        </header>
+        <p class="panel-copy">只使用你在此创建的待办和提醒，不读取未授权窗口、应用或文件内容。</p>
+        <section class="planner-summary-card">
+          <div class="planner-section-heading"><span><b>今日摘要</b><small>当前时间段、待办和未来 24 小时提醒</small></span><button id="refreshPlannerSummaryButton" type="button">刷新</button></div>
+          <div id="plannerSummary" class="planner-summary">正在生成本地摘要…</div>
+        </section>
+        <form id="proactiveSettingsForm" class="planner-settings-form">
+          <label class="toggle-row">
+            <span><b>主动助手</b><small>总开关；默认关闭，开启后才会主动问候和推送摘要</small></span>
+            <input id="proactiveEnabledInput" type="checkbox" />
+          </label>
+          <div class="planner-toggle-grid">
+            <label class="toggle-row"><span><b>启动问候</b><small>启动后显示本地状态</small></span><input id="startupGreetingInput" type="checkbox" checked /></label>
+            <label class="toggle-row"><span><b>每日摘要</b><small>每天最多一次</small></span><input id="dailySummaryInput" type="checkbox" checked /></label>
+          </div>
+          <div class="planner-time-grid">
+            <label><span>摘要时间</span><input id="dailySummaryTimeInput" type="time" value="08:30" /></label>
+            <label class="toggle-row compact-toggle"><span><b>免打扰</b><small>到期提醒会延后，不会丢失</small></span><input id="quietHoursInput" type="checkbox" checked /></label>
+            <label><span>开始</span><input id="quietStartInput" type="time" value="22:00" /></label>
+            <label><span>结束</span><input id="quietEndInput" type="time" value="08:00" /></label>
+          </div>
+          <button class="secondary-button" type="submit">保存主动助手设置</button>
+        </form>
+        <section class="planner-section">
+          <div class="planner-section-heading"><span><b>待办事项</b><small id="taskCount">0 项未完成</small></span></div>
+          <form id="taskAddForm" class="planner-add-form">
+            <input id="taskTitleInput" maxlength="120" placeholder="例如：完成项目进度说明" />
+            <input id="taskDueInput" type="datetime-local" aria-label="待办时间，可选" />
+            <button type="submit">添加待办</button>
+          </form>
+          <div id="taskList" class="planner-list"></div>
+        </section>
+        <section class="planner-section">
+          <div class="planner-section-heading"><span><b>定时提醒</b><small id="reminderCount">0 个等待中</small></span></div>
+          <form id="reminderAddForm" class="planner-add-form">
+            <input id="reminderTitleInput" maxlength="120" placeholder="例如：喝水" />
+            <input id="reminderDueInput" type="datetime-local" required aria-label="提醒时间" />
+            <button type="submit">添加提醒</button>
+          </form>
+          <div id="plannerReminderList" class="planner-list"></div>
+        </section>
+        <div class="security-note">主动助手默认关闭；所有计划仅保存在本机，任何主动行为都可在这里关闭。</div>
+      </section>
+    </div>
+
+    <div id="companionOverlay" class="overlay hidden">
+      <section class="settings-card companion-center-card" role="dialog" aria-modal="true" aria-labelledby="companionTitle">
+        <header>
+          <div>
+            <span class="eyebrow">LOCAL COMPANION</span>
+            <h2 id="companionTitle">陪伴与互动中心</h2>
+          </div>
+          <button id="companionCloseButton" class="icon-button">×</button>
+        </header>
+        <p class="panel-copy">陪伴值只记录本地互动类型和次数，不保存聊天正文、语音内容或窗口内容。</p>
+        <section class="companion-level-card">
+          <div class="companion-level-heading">
+            <span><b id="companionLevelName">Lv.1 初识</b><small id="companionScoreText">陪伴值 0</small></span>
+            <span id="companionAddressPreview">称呼：未设置</span>
+          </div>
+          <div class="companion-progress"><i id="companionProgressFill"></i></div>
+          <div id="companionStats" class="companion-stats"></div>
+        </section>
+        <form id="companionSettingsForm" class="companion-settings-form">
+          <div class="settings-section-heading"><span><b>生命感控制</b><small>所有互动都可以关闭或降频</small></span></div>
+          <label class="toggle-row">
+            <span><b>点击与拖动互动</b><small>允许摸头、点击反馈和拖动桌宠窗口</small></span>
+            <input id="companionInteractionsInput" type="checkbox" checked />
+          </label>
+          <div class="companion-select-grid">
+            <label><span>待机动画频率</span><select id="companionIdleFrequencyInput"><option value="off">关闭</option><option value="low">较低</option><option value="normal">正常</option><option value="high">活跃</option></select></label>
+            <label><span>主动气泡频率</span><select id="companionBubbleFrequencyInput"><option value="off">关闭</option><option value="low">较低</option><option value="normal">正常</option></select></label>
+            <label><span>后台模式</span><select id="companionBackgroundModeInput"><option value="mini">显示迷你桌宠</option><option value="hidden">完全隐藏</option></select></label>
+            <label><span>空闲休眠</span><select id="companionSleepInput"><option value="0">关闭</option><option value="5">5 分钟</option><option value="10">10 分钟</option><option value="20">20 分钟</option><option value="30">30 分钟</option></select></label>
+          </div>
+          <label class="toggle-row"><span><b>迷你模式鼠标穿透</b><small>可随时通过恢复快捷键或托盘关闭</small></span><input id="companionMiniClickThroughInput" type="checkbox" /></label>
+          <label class="toggle-row"><span><b>全屏时自动隐藏</b><small>仅检测前台窗口边界，不读取窗口正文</small></span><input id="companionFullscreenInput" type="checkbox" checked /></label>
+          <label class="toggle-row"><span><b>电池低性能模式</b><small>使用电池时自动减少动画</small></span><input id="companionBatteryInput" type="checkbox" checked /></label>
+          <label class="toggle-row"><span><b>鼠标与边缘反应</b><small>靠近、快速划过和屏幕边缘动作</small></span><input id="companionReactionsInput" type="checkbox" checked /></label>
+          <label class="toggle-row">
+            <span><b>低性能模式</b><small>降低动画帧率并停用背景旋转效果</small></span>
+            <input id="companionLowPerformanceInput" type="checkbox" />
+          </label>
+          <label class="toggle-row">
+            <span><b>成就系统</b><small>关闭后仍保留陪伴值，但不解锁或提示成就</small></span>
+            <input id="companionAchievementsInput" type="checkbox" checked />
+          </label>
+          <label><span>希望 Astra 如何称呼你</span><select id="companionAddressInput"></select></label>
+          <div class="settings-section-heading"><span><b>原创机甲装扮</b><small>角色包仅允许图片和配置，不执行脚本</small></span></div>
+          <div class="companion-select-grid cosmetics-grid">
+            <label><span>机甲配色</span><select id="companionThemeInput"></select></label>
+            <label><span>眼睛</span><select id="companionEyeInput"></select></label>
+            <label><span>核心</span><select id="companionCoreInput"></select></label>
+            <label><span>肩甲</span><select id="companionShoulderInput"></select></label>
+            <label><span>悬浮光环</span><select id="companionHaloInput"></select></label>
+          </div>
+          <button class="secondary-button" type="submit">保存陪伴设置</button>
+        </form>
+        <section class="companion-section">
+          <div class="planner-section-heading"><span><b>互动收藏册</b><small>只保存已解锁节点及时间</small></span></div>
+          <div id="companionCollectionList" class="companion-collection-list"></div>
+        </section>
+        <section class="companion-section">
+          <div class="planner-section-heading"><span><b>本地成就</b><small>可随时关闭</small></span></div>
+          <div id="companionAchievementList" class="companion-achievement-list"></div>
+        </section>
+        <div class="companion-reset-row"><span>重置会清除陪伴值、收藏和成就，不影响记忆与计划。</span><button id="resetCompanionButton" type="button">重置陪伴进度</button></div>
+      </section>
+    </div>
+
+    <div id="settingsOverlay" class="overlay hidden">
+      <section class="settings-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <header>
+          <div>
+            <span class="eyebrow">CONNECTION</span>
+            <h2 id="settingsTitle">AI 服务设置</h2>
+          </div>
+          <button id="settingsCloseButton" class="icon-button">×</button>
+        </header>
+        <form id="settingsForm">
+          <label>
+            <span>兼容接口地址</span>
+            <input id="endpointInput" type="url" placeholder="https://api.example.com/v1" />
+            <small>程序会在地址后调用 <code>/chat/completions</code></small>
+          </label>
+          <label>
+            <span>模型名称</span>
+            <input id="modelInput" placeholder="填写服务商提供的模型名称" />
+          </label>
+          <label>
+            <span>语音转写模型</span>
+            <input id="transcriptionModelInput" placeholder="gpt-4o-mini-transcribe" />
+            <small>按住说话时调用兼容的 <code>/audio/transcriptions</code> 接口</small>
+          </label>
+          <section class="realtime-settings" aria-labelledby="realtimeSettingsTitle">
+            <div class="settings-section-heading">
+              <span><b id="realtimeSettingsTitle">实时语音</b><small>双向音频、流式字幕、自然打断；普通按住说话仍保留</small></span>
+            </div>
+            <label class="toggle-row">
+              <span><b>启用实时语音</b><small>仅在你手动开始通话后访问麦克风</small></span>
+              <input id="realtimeEnabledInput" type="checkbox" />
+            </label>
+            <label>
+              <span>Realtime 模型</span>
+              <select id="realtimeModelInput"></select>
+            </label>
+            <label>
+              <span>声音</span>
+              <select id="realtimeVoiceInput"></select>
+            </label>
+            <label>
+              <span>接话速度</span>
+              <select id="realtimeVadModeInput">
+                <option value="natural">自然</option>
+                <option value="fast">快速</option>
+              </select>
+            </label>
+            <label class="toggle-row">
+              <span><b>启动后自动连接</b><small>开启后会在应用启动时请求麦克风权限</small></span>
+              <input id="realtimeAutoConnectInput" type="checkbox" />
+            </label>
+            <label class="toggle-row">
+              <span><b>断线自动重连</b><small>最多重试 3 次，失败后回退按住说话</small></span>
+              <input id="realtimeReconnectInput" type="checkbox" checked />
+            </label>
+            <label class="toggle-row">
+              <span><b>语音技能桥接</b><small>识别本地白名单命令，并要求你说“确认”后才执行</small></span>
+              <input id="voiceSkillBridgeInput" type="checkbox" />
+            </label>
+            <small class="voice-bridge-scope">首版支持：打开固定工具或白名单应用、截图、系统音量和分钟提醒；不开放 Shell、剪贴板或文件搜索。</small>
+            <div class="realtime-limit-grid">
+              <label>
+                <span>空闲自动断开</span>
+                <select id="realtimeIdleMinutesInput">
+                  <option value="0">不限制</option>
+                  <option value="5">5 分钟</option>
+                  <option value="10">10 分钟</option>
+                  <option value="20">20 分钟</option>
+                </select>
+              </label>
+              <label>
+                <span>单次通话上限</span>
+                <select id="realtimeMaxMinutesInput">
+                  <option value="10">10 分钟</option>
+                  <option value="20">20 分钟</option>
+                  <option value="30">30 分钟</option>
+                  <option value="60">60 分钟</option>
+                </select>
+              </label>
+            </div>
+            <div class="realtime-device-heading"><span>音频设备</span><button id="refreshAudioDevicesButton" type="button">刷新并授权</button></div>
+            <label>
+              <span>麦克风</span>
+              <select id="realtimeInputDeviceInput"><option value="">系统默认</option></select>
+            </label>
+            <label>
+              <span>扬声器</span>
+              <select id="realtimeOutputDeviceInput"><option value="">系统默认</option></select>
+              <small>部分 Windows 音频驱动不支持应用内切换，将自动使用系统默认设备。</small>
+            </label>
+            <small class="realtime-privacy">Realtime 会话不开放模型工具调用；电脑操作仍必须经过本地固定白名单。</small>
+          </section>
+          <label>
+            <span>API Key</span>
+            <input id="apiKeyInput" type="password" autocomplete="off" placeholder="仅加密保存在本机" />
+          </label>
+          <label class="toggle-row">
+            <span><b>语音播报</b><small>使用 Windows 系统语音朗读回答</small></span>
+            <input id="speakRepliesInput" type="checkbox" checked />
+          </label>
+          <label class="toggle-row">
+            <span><b>开机启动</b><small>登录 Windows 后自动运行 Astra</small></span>
+            <input id="launchAtLoginInput" type="checkbox" />
+          </label>
+          <label>
+            <span>鼠标穿透恢复快捷键</span>
+            <select id="restoreShortcutInput"></select>
+            <small>系统还会保留紧急恢复快捷键，避免主快捷键被其他软件占用。</small>
+          </label>
+          <label><span>HTTPS 更新清单地址</span><input id="updateManifestInput" type="url" placeholder="默认关闭，不会自动下载" /></label>
+          <div class="settings-link-card"><span><b>本地数据管理</b><small>备份不包含 API Key；恢复和清除都需用户操作</small></span><button id="checkUpdatesButton" type="button">检查更新</button></div>
+          <div class="data-actions"><button id="exportDataButton" type="button">导出备份</button><button id="importDataButton" type="button">恢复备份</button><button id="clearDataButton" type="button">完全清除</button></div>
+          <div class="settings-link-card">
+            <span><b>应用白名单</b><small>管理微信、QQ、VS Code 和其他可信应用</small></span>
+            <button id="manageAppsButton" type="button">管理</button>
+          </div>
+          <div class="settings-link-card">
+            <span><b>记忆与人格</b><small>管理称呼、回答风格和本地记忆</small></span>
+            <button id="manageMemoryButton" type="button">管理</button>
+          </div>
+          <div class="settings-link-card">
+            <span><b>计划与主动助手</b><small>管理待办、提醒、每日摘要和免打扰时间</small></span>
+            <button id="managePlannerButton" type="button">管理</button>
+          </div>
+          <div class="settings-link-card">
+            <span><b>桌宠与陪伴</b><small>管理互动频率、低性能模式、称呼和本地成长</small></span>
+            <button id="manageCompanionButton" type="button">管理</button>
+          </div>
+          <section class="diagnostics-card" aria-labelledby="diagnosticsTitle">
+            <div class="diagnostics-heading">
+              <span><b id="diagnosticsTitle">稳定性诊断</b><small>检查窗口数量、恢复快捷键和鼠标穿透状态</small></span>
+              <button id="refreshDiagnosticsButton" type="button">刷新</button>
+            </div>
+            <div id="diagnosticsGrid" class="diagnostics-grid">
+              <span>正在读取状态…</span>
+            </div>
+            <div class="diagnostics-actions">
+              <button id="exportDiagnosticsButton" type="button">导出诊断报告</button>
+              <button id="safeModeButton" type="button">以安全模式重启</button>
+            </div>
+          </section>
+          <div class="security-note">API Key 通过 Windows 系统加密能力保存，不会写入界面文件或安装包。</div>
+          <button class="primary-button" type="submit">保存并连接</button>
+        </form>
+      </section>
+    </div>
+
+    <div id="toast" class="toast" role="status"></div>
+    <div id="onboardingOverlay" class="overlay hidden"><section class="settings-card onboarding-card"><span class="eyebrow">WELCOME</span><h2>欢迎使用 Astra Desktop 1.6</h2><p>麦克风、图片、本地模型、知识库、主动提醒和电脑技能都由你明确开启。Astra 不读取未授权窗口正文，不自动截图，图片只有点击发送后才会交给你选择的模型。</p><ul><li>右键桌宠可打开固定快捷轮盘，双击迷你桌宠恢复完整界面</li><li>模型部署助手只下载固定可信清单文件并校验 SHA256</li><li>电脑操作只使用固定白名单和声明式工作流</li><li>本地模型、知识和语音记录可随时停止或清除</li><li>更新下载和安装必须由你确认</li></ul><button id="completeOnboardingButton" class="primary-button" type="button">我已了解，开始使用</button></section></div>
+    <script src="interaction-utils.js"></script>
+    <script src="voice-utils.js"></script>
+    <script src="voice-bridge.js"></script>
+    <script src="renderer.js"></script>
+  </body>
+</html>
