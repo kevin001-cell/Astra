@@ -51,9 +51,11 @@ const {
   localChatEndpoint,
   localHealthEndpoint,
   missingWindowsRuntimeDlls,
-  normalizeLocalAiSettings
+  normalizeLocalAiSettings,
+  recommendGpuLayers
 } = require('./local-ai.cjs');
 const { buildWhisperArgs, normalizeOfflineVoiceSettings, offlineVoiceReady } = require('./offline-voice.cjs');
+const { detectNvidiaGpu } = require('./gpu-detector.cjs');
 const { normalizeScenarioStore, scenarioState, scheduledScenario } = require('./scenarios.cjs');
 const { createWorkflow, normalizeWorkflowStore, removeWorkflow } = require('./workflows.cjs');
 const {
@@ -802,6 +804,31 @@ function localModelCompatibility(settings) {
     memoryRisk: estimatedMemoryBytes > totalMemoryBytes * 0.92 ? 'blocked' : estimatedMemoryBytes > freeMemoryBytes * 1.15 ? 'warning' : 'ok',
     warning: inspection.hasChatTemplate ? '' : '未在模型头部检测到聊天模板，启动后将继续进行模板诊断。'
   };
+}
+
+async function recommendLocalGpuLayers() {
+  const settings = readLocalAiSettings();
+  if (!settings.modelPath || !fs.existsSync(settings.modelPath)) {
+    return { gpu: { available: false, reason: '尚未选择 GGUF 模型' }, model: {}, recommendation: { layers: 0, reason: '尚未选择 GGUF 模型' } };
+  }
+  const compatibility = localModelCompatibility(settings);
+  if (!compatibility.valid) {
+    return { gpu: { available: false, reason: compatibility.error || '模型无效' }, model: {}, recommendation: { layers: 0, reason: compatibility.error || '模型无效' } };
+  }
+  const gpu = await detectNvidiaGpu();
+  const model = { sizeBytes: compatibility.sizeBytes, blockCount: compatibility.blockCount, architecture: compatibility.architecture };
+  if (!gpu.available) {
+    return { gpu, model, recommendation: { layers: 0, reason: gpu.reason || '未检测到可用 GPU' } };
+  }
+  if (!Number.isFinite(compatibility.blockCount) || compatibility.blockCount <= 0) {
+    return { gpu, model, recommendation: { layers: 0, reason: '无法解析模型层数，请手动设置' } };
+  }
+  const recommendation = recommendGpuLayers({
+    blockCount: compatibility.blockCount,
+    modelBytes: compatibility.sizeBytes,
+    vramBytes: gpu.vramBytes
+  });
+  return { gpu, model, recommendation };
 }
 
 function localAiPublicState() {
@@ -2811,6 +2838,7 @@ ipcMain.handle('local-ai:select-mmproj', () => selectModel('选择多模态 mmpr
 ipcMain.handle('local-ai:start', async () => { localServerRestartAttempts = 0; await ensureLocalServer(); return localAiPublicState(); });
 ipcMain.handle('local-ai:stop', () => { stopLocalServer('renderer'); return localAiPublicState(); });
 ipcMain.handle('local-ai:wizard-dismiss', () => { const settings = readLocalAiSettings(); writeLocalAiSettings({ ...settings, wizardDismissed: true }); return localAiPublicState(); });
+ipcMain.handle('local-ai:recommend-gpu-layers', () => recommendLocalGpuLayers());
 ipcMain.handle('model-manager:download', (_event, modelId) => startTrustedModelDownload(modelId));
 ipcMain.handle('model-manager:select', (_event, modelId) => selectTrustedModel(modelId));
 ipcMain.handle('model-manager:pause', () => pauseTrustedModelDownload());

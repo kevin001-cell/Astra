@@ -155,6 +155,10 @@
             <label><span>CPU 线程</span><input id="localAiThreadsInput" type="number" min="1" max="32" value="4" /></label>
             <label><span>GPU 层数</span><input id="localAiGpuInput" type="number" min="0" max="999" value="0" /></label>
           </div>
+          <div class="gpu-layers-actions">
+            <button id="recommendGpuLayersButton" type="button" class="secondary-button">智能推荐 GPU 层数</button>
+            <div id="gpuRecommendationDetails" class="model-inspection-result">点击「智能推荐」检测显卡并给出建议值。</div>
+          </div>
           <div class="runtime-picker"><input id="localAiRuntimeInput" readonly placeholder="选择 llama-server.exe" /><button id="selectLocalAiRuntimeButton" type="button">选择运行时</button></div>
           <div class="runtime-picker"><input id="localAiModelInput" readonly placeholder="选择 GGUF 对话模型" /><button id="selectLocalAiModelButton" type="button">选择模型</button></div>
           <div class="runtime-picker"><input id="localAiMmprojInput" readonly placeholder="可选：选择 mmproj GGUF 以启用图片理解" /><button id="selectLocalAiMmprojButton" type="button">选择 mmproj</button></div>

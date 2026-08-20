@@ -122,6 +122,8 @@ const localAiModeInput = document.querySelector('#localAiModeInput');
 const localAiProfileInput = document.querySelector('#localAiProfileInput');
 const localAiThreadsInput = document.querySelector('#localAiThreadsInput');
 const localAiGpuInput = document.querySelector('#localAiGpuInput');
+const recommendGpuLayersButton = document.querySelector('#recommendGpuLayersButton');
+const gpuRecommendationDetails = document.querySelector('#gpuRecommendationDetails');
 const localAiRuntimeInput = document.querySelector('#localAiRuntimeInput');
 const localAiModelInput = document.querySelector('#localAiModelInput');
 const localAiMmprojInput = document.querySelector('#localAiMmprojInput');
@@ -493,7 +495,7 @@ function updateRecoveryUi() {
   const localVoiceReady = offlineVoiceState.ready === true;
   const realtimeReady = Boolean(currentSettings.realtimeEnabled && onlineVoiceReady);
   if (!realtimeSession) {
-    voiceInputHint.textContent = realtimeReady ? currentSettings.voiceSkillBridgeEnabled ? '可开始实时通话；白名单语音命令会先请求确认' : '可开始实时通话；按住麦克风仍使用普通识别' : onlineVoiceReady ? '按住麦克风说话，松开或静音后在线识别' : localVoiceReady ? '按住麦克风说话，录音只在本机使用 Whisper 识别' : '未配置转写服务时，将尝试使用系统语音识别';
+    voiceInputHint.textContent = realtimeReady ? currentSettings.voiceSkillBridgeEnabled ? '可开始实时通话；白名单语音命令会先请求确认' : '可开始实时通话；按住麦克风仍使用普通识别' : onlineVoiceReady ? '按住麦克风说话，松开或静音后在线识别' : localVoiceReady ? '按住麦克风说话，录音只在本机使用 Whisper 识别' : '未配置转写服务，麦克风不可用；请在设置中填写接口地址和 API Key，或配置离线语音';
   }
   realtimeButton.disabled = !realtimeReady;
   realtimeButton.title = realtimeReady ? '开始低延迟双向语音会话' : '请先在设置中开启实时语音并配置接口';
@@ -2007,7 +2009,9 @@ function updateRealtimeButton() {
   realtimeButton.classList.toggle('active', state !== 'idle');
   realtimeButton.disabled = state === 'connecting' || (state === 'idle' && (!currentSettings.realtimeEnabled || !currentSettings.endpoint || !currentSettings.apiKeyConfigured));
   realtimeButton.textContent = state === 'connecting' ? '正在连接…' : state === 'reconnecting' ? '取消重连' : state === 'idle' ? '开始实时通话' : '结束实时通话';
-  micButton.disabled = state !== 'idle';
+  const canUseVoiceInput = Boolean(currentSettings.endpoint && currentSettings.apiKeyConfigured) || offlineVoiceState.ready === true || Boolean(speechRecognition);
+  micButton.disabled = state !== 'idle' || !canUseVoiceInput;
+  micButton.title = state !== 'idle' ? '实时通话进行中，按住麦克风不可用' : canUseVoiceInput ? '按住说话，松开发送' : '未配置转写服务，麦克风不可用；请在设置中填写接口地址和 API Key，或配置离线语音';
 }
 
 function getRealtimeMessage(key, role) {
@@ -3464,6 +3468,45 @@ document.querySelector('#inspectLocalModelButton').addEventListener('click', asy
   } catch (error) { modelInspectionResult.textContent = `检查失败：${error.message}`; }
   finally { event.currentTarget.disabled = false; }
 });
+recommendGpuLayersButton.addEventListener('click', async event => {
+  event.currentTarget.disabled = true;
+  gpuRecommendationDetails.innerHTML = '正在检测显卡并解析模型层数…';
+  try {
+    const result = await api.recommendGpuLayers();
+    renderGpuRecommendation(result);
+  } catch (error) {
+    gpuRecommendationDetails.textContent = `检测失败：${error.message}`;
+  } finally {
+    event.currentTarget.disabled = false;
+  }
+});
+function renderGpuRecommendation(result) {
+  gpuRecommendationDetails.innerHTML = '';
+  if (!result || !result.gpu || !result.gpu.available) {
+    gpuRecommendationDetails.textContent = (result && result.gpu && result.gpu.reason) || '未检测到可用 NVIDIA GPU，建议 CPU 推理（GPU 层数设为 0）。';
+    return;
+  }
+  const gpuName = result.gpu.deviceName || 'NVIDIA GPU';
+  const vramLabel = formatByteCount(Number(result.gpu.vramBytes) || 0);
+  const blockCount = Number(result.model && result.model.blockCount) || 0;
+  const modelSize = formatByteCount(Number(result.model && result.model.sizeBytes) || 0);
+  const layers = Number(result.recommendation && result.recommendation.layers) || 0;
+  const reason = (result.recommendation && result.recommendation.reason) || '';
+  const summary = document.createElement('div');
+  summary.textContent = `${gpuName} · ${vramLabel} 显存 · 模型 ${blockCount ? blockCount + ' 层' : '层数未知'}（${modelSize}）· 建议 ${layers} 层${reason ? ' · ' + reason : ''}`;
+  gpuRecommendationDetails.appendChild(summary);
+  if (blockCount > 0) {
+    const applyButton = document.createElement('button');
+    applyButton.type = 'button';
+    applyButton.className = 'secondary-button';
+    applyButton.textContent = `采用 ${layers} 层`;
+    applyButton.addEventListener('click', () => {
+      localAiGpuInput.value = String(layers);
+      showToast(`已填入 ${layers} 层，请记得「保存配置」使其生效。`);
+    });
+    gpuRecommendationDetails.appendChild(applyButton);
+  }
+}
 deleteManagedModelButton.addEventListener('click', async () => {
   const modelId = deleteManagedModelButton.dataset.modelId;
   if (!modelId || !confirm('删除 Astra 模型目录中的已选模型？此操作不会删除其他目录中的模型。')) return;

@@ -124,6 +124,24 @@ function describeRuntimeExitCode(value) {
   return `运行时进程退出：${code}`;
 }
 
+function recommendGpuLayers(input = {}) {
+  const blockCount = Number(input.blockCount);
+  const modelBytes = Number(input.modelBytes);
+  const vramBytes = Number(input.vramBytes);
+  if (!Number.isFinite(blockCount) || blockCount <= 0 || !Number.isFinite(modelBytes) || modelBytes <= 0 || !Number.isFinite(vramBytes) || vramBytes <= 0) {
+    return { layers: 0, reason: '信息不足，默认 CPU 推理' };
+  }
+  if (vramBytes < 1024 ** 3) {
+    return { layers: 0, reason: '显存不足 1 GB，建议 CPU 推理' };
+  }
+  const perLayerBytes = modelBytes / blockCount;
+  const reserve = Math.min(1024 ** 3, vramBytes * 0.15);
+  const usable = vramBytes - reserve;
+  const layers = Math.max(0, Math.min(blockCount, Math.floor(usable / perLayerBytes)));
+  const reason = `每层约 ${(perLayerBytes / 1024 / 1024).toFixed(0)} MB，已留 ${(reserve / 1024 / 1024).toFixed(0)} MB KV 缓存`;
+  return { layers, perLayerBytes, reserve, reason };
+}
+
 module.exports = {
   DEFAULT_LOCAL_AI_SETTINGS,
   LOCAL_AI_MODES,
@@ -138,5 +156,6 @@ module.exports = {
   localHealthEndpoint,
   missingWindowsRuntimeDlls,
   normalizeLocalAiSettings,
-  normalizeModelPath
+  normalizeModelPath,
+  recommendGpuLayers
 };
