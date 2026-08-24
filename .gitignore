@@ -4,6 +4,7 @@ work/
 build-shim/
 dist/
 dist-*/
+.eb-cache/
 outputs/
 release/
 *.tgz

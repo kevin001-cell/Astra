@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('astra', {
   startLocalAi: () => ipcRenderer.invoke('local-ai:start'),
   stopLocalAi: () => ipcRenderer.invoke('local-ai:stop'),
   dismissLocalAiWizard: () => ipcRenderer.invoke('local-ai:wizard-dismiss'),
+  recommendGpuLayers: () => ipcRenderer.invoke('local-ai:recommend-gpu-layers'),
   downloadManagedModel: modelId => ipcRenderer.invoke('model-manager:download', modelId),
   selectManagedModel: modelId => ipcRenderer.invoke('model-manager:select', modelId),
   pauseManagedModelDownload: () => ipcRenderer.invoke('model-manager:pause'),
