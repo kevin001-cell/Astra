@@ -101,6 +101,7 @@
           <button id="imageButton" class="composer-button" type="button" title="选择图片">＋</button>
           <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden />
           <button id="micButton" class="composer-button" type="button" title="按住说话，松开发送" aria-label="按住说话">◉</button>
+          <button id="webSearchButton" class="composer-button" type="button" title="联网搜索本条消息（需在设置中配置搜索 API）" aria-label="联网搜索本条消息" aria-pressed="false">🌐</button>
           <textarea id="messageInput" rows="1" autocomplete="off" maxlength="8000" placeholder="输入消息，或按 / 查看快捷指令…"></textarea>
           <div class="composer-actions">
             <button id="stopGenerationButton" class="stop-button hidden" type="button" title="停止生成">■</button>
@@ -513,6 +514,24 @@
               <small>部分 Windows 音频驱动不支持应用内切换，将自动使用系统默认设备。</small>
             </label>
             <small class="realtime-privacy">Realtime 会话不开放模型工具调用；电脑操作仍必须经过本地固定白名单。</small>
+          </section>
+          <section class="realtime-settings" aria-labelledby="webSearchSettingsTitle">
+            <div class="settings-section-heading">
+              <span><b id="webSearchSettingsTitle">联网搜索</b><small>开启后消息命中“搜索/查一下”等关键词，或点击输入栏 🌐 时，先搜索再回答；结果仅注入文本摘要</small></span>
+            </div>
+            <label class="toggle-row">
+              <span><b>启用联网搜索</b><small>默认关闭；仅使用固定可信搜索服务，不抓取网页正文</small></span>
+              <input id="webSearchEnabledInput" type="checkbox" />
+            </label>
+            <label>
+              <span>搜索服务商</span>
+              <select id="searchProviderInput"></select>
+              <small>博查国内可直连（付费）；Tavily 提供免费额度，通常需要代理</small>
+            </label>
+            <label>
+              <span>搜索 API Key</span>
+              <input id="searchApiKeyInput" type="password" autocomplete="off" placeholder="仅加密保存在本机" />
+            </label>
           </section>
           <label>
             <span>API Key</span>

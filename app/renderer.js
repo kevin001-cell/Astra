@@ -10,6 +10,7 @@ const messageInput = document.querySelector('#messageInput');
 const sendButton = document.querySelector('#sendButton');
 const stopGenerationButton = document.querySelector('#stopGenerationButton');
 const micButton = document.querySelector('#micButton');
+const webSearchButton = document.querySelector('#webSearchButton');
 const realtimeButton = document.querySelector('#realtimeButton');
 const realtimeAudio = document.querySelector('#realtimeAudio');
 const settingsOverlay = document.querySelector('#settingsOverlay');
@@ -105,6 +106,9 @@ const realtimeInputDeviceInput = document.querySelector('#realtimeInputDeviceInp
 const realtimeOutputDeviceInput = document.querySelector('#realtimeOutputDeviceInput');
 const refreshAudioDevicesButton = document.querySelector('#refreshAudioDevicesButton');
 const apiKeyInput = document.querySelector('#apiKeyInput');
+const webSearchEnabledInput = document.querySelector('#webSearchEnabledInput');
+const searchProviderInput = document.querySelector('#searchProviderInput');
+const searchApiKeyInput = document.querySelector('#searchApiKeyInput');
 const speakRepliesInput = document.querySelector('#speakRepliesInput');
 const launchAtLoginInput = document.querySelector('#launchAtLoginInput');
 const restoreShortcutInput = document.querySelector('#restoreShortcutInput');
@@ -173,6 +177,7 @@ let scenarioStoreState = { active: 'normal', definition: {}, options: [], automa
 let workflowState = { workflows: [] };
 let whitelistedApps = [];
 let busy = false;
+let messageWebSearch = false;
 let activeChatRequestId = '';
 let activeChatMessage;
 let activeChatText = '';
@@ -507,6 +512,17 @@ function replaceSelectOptions(select, values, selectedValue) {
     const option = document.createElement('option');
     option.value = value;
     option.textContent = value;
+    select.append(option);
+  }
+  select.value = selectedValue || select.options[0]?.value || '';
+}
+
+function replaceLabeledOptions(select, options, selectedValue) {
+  select.replaceChildren();
+  for (const item of options || []) {
+    const option = document.createElement('option');
+    option.value = item.value;
+    option.textContent = item.label;
     select.append(option);
   }
   select.value = selectedValue || select.options[0]?.value || '';
@@ -1906,7 +1922,7 @@ async function sendMessage(message) {
       activeChatText = '';
       activeChatMetrics = {};
       activeChatCompletion = new Promise(resolve => { activeChatCompletionResolve = resolve; });
-      const result = await api.startChatStream({ message: cleaned, history: history.slice(0, -1), images });
+      const result = await api.startChatStream({ message: cleaned, history: history.slice(0, -1), images, webSearch: messageWebSearch });
       activeChatRequestId = result.requestId;
       stopGenerationButton.classList.remove('hidden');
       sendButton.disabled = false;
@@ -1978,6 +1994,9 @@ function openSettings() {
   realtimeMaxMinutesInput.value = String(currentSettings.realtimeMaxMinutes ?? 30);
   launchAtLoginInput.checked = Boolean(currentSettings.launchAtLogin);
   updateManifestInput.value = currentSettings.updateManifestUrl || '';
+  webSearchEnabledInput.checked = currentSettings.webSearchEnabled === true;
+  replaceLabeledOptions(searchProviderInput, currentSettings.searchProviderOptions, currentSettings.searchProvider);
+  searchApiKeyInput.value = currentSettings.searchApiKey || '';
   updateRecoveryUi();
   appsOverlay.classList.add('hidden');
   skillsOverlay.classList.add('hidden');
@@ -3194,6 +3213,29 @@ api.onChatStreamEvent(payload => {
     connectionStatus.textContent = payload.mode === 'online' ? '在线 AI' : payload.mode === 'local' ? '本地 AI · 流式生成' : '离线基础模式';
     return;
   }
+  if (payload.type === 'search') {
+    if (payload.status === 'searching') {
+      connectionStatus.textContent = '正在联网搜索';
+      paragraph.textContent = '正在联网搜索…';
+      return;
+    }
+    if (payload.status === 'done') {
+      connectionStatus.textContent = `已找到 ${payload.count} 条资料，正在生成回答`;
+      paragraph.textContent = '正在结合搜索结果生成回答…';
+      return;
+    }
+    if (payload.status === 'failed') {
+      connectionStatus.textContent = '联网搜索失败';
+      paragraph.textContent = '搜索失败，改为直接回答…';
+      showToast(`联网搜索失败：${payload.error}`);
+      return;
+    }
+    if (payload.status === 'unavailable') {
+      showToast(String(payload.error || '联网搜索未配置。'));
+      return;
+    }
+    return;
+  }
   if (payload.type === 'delta') {
     activeChatMessage.classList.remove('pending');
     activeChatText += String(payload.text || '');
@@ -3253,6 +3295,22 @@ document.querySelector('#plannerButton').addEventListener('click', openPlanner);
 document.querySelector('#focusButton').addEventListener('click', async () => { focusOverlay.classList.remove('hidden'); focusState = await api.getFocus(); renderFocus(); });
 document.querySelector('#focusCloseButton').addEventListener('click', () => focusOverlay.classList.add('hidden'));
 document.querySelector('#imageButton').addEventListener('click', () => imageInput.click());
+
+function applyWebSearchToggle() {
+  webSearchButton.classList.toggle('active', messageWebSearch);
+  webSearchButton.setAttribute('aria-pressed', messageWebSearch ? 'true' : 'false');
+  webSearchButton.title = messageWebSearch ? '联网搜索已开启（本条消息将先搜索再回答）' : '联网搜索本条消息（需在设置中配置搜索 API）';
+}
+
+webSearchButton.addEventListener('click', () => {
+  messageWebSearch = !messageWebSearch;
+  try { localStorage.setItem('astra.messageWebSearch', messageWebSearch ? '1' : '0'); } catch {}
+  applyWebSearchToggle();
+});
+
+try { messageWebSearch = localStorage.getItem('astra.messageWebSearch') === '1'; } catch {}
+applyWebSearchToggle();
+
 imageInput.addEventListener('change', async () => { try { await addImageFiles(imageInput.files); } catch (error) { showToast(error.message); } imageInput.value = ''; });
 document.addEventListener('paste', event => { const files = [...(event.clipboardData?.files || [])]; if (files.length) { event.preventDefault(); addImageFiles(files).catch(error => showToast(error.message)); } });
 document.addEventListener('dragover', event => { if ([...(event.dataTransfer?.types || [])].includes('Files')) event.preventDefault(); });
@@ -3660,6 +3718,9 @@ settingsForm.addEventListener('submit', async event => {
       launchAtLogin: launchAtLoginInput.checked,
       restoreShortcut: restoreShortcutInput.value
       ,updateManifestUrl: updateManifestInput.value
+      ,webSearchEnabled: webSearchEnabledInput.checked
+      ,searchProvider: searchProviderInput.value
+      ,searchApiKey: searchApiKeyInput.value
     });
     updateRecoveryUi();
     if (realtimeSession || realtimeReconnectTimer) stopRealtimeVoice('settings');
