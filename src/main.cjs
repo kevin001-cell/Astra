@@ -29,6 +29,14 @@ const { clearFocusHistory, completeFocus, normalizeFocusStore, saveFocusSettings
 const { buildUserContent, normalizeImageAttachments } = require('./images.cjs');
 const { buildKnowledgeContext, normalizeKnowledgeStore, searchKnowledge } = require('./knowledge.cjs');
 const {
+  SEARCH_PROVIDERS,
+  buildSearchContext,
+  buildSearchQuery,
+  buildSourceFootnote,
+  containsSearchIntent,
+  searchWeb: requestWebSearch
+} = require('./web-search.cjs');
+const {
   TRUSTED_MODEL_CATALOG,
   describeModelDownloadError,
   dynamicStartupTimeoutMs,
@@ -176,6 +184,7 @@ const MAX_FILE_SEARCH_RESULTS = 30;
 const MAX_FILE_SEARCH_ENTRIES = 12000;
 const MAX_TIMER_DELAY = 2147480000;
 const API_KEY_MASK = '••••••••••••';
+const SEARCH_API_KEY_MASK = '••••••••';
 if (SOFTWARE_RENDERING_MODE) {
   app.disableHardwareAcceleration();
   for (const chromiumSwitch of getSafeModeChromiumSwitches()) app.commandLine.appendSwitch(chromiumSwitch);
@@ -731,8 +740,25 @@ function decryptApiKey(settings = readSettingsFile()) {
   return apiKey;
 }
 
+function decryptSearchApiKey(settings = readSettingsFile()) {
+  let apiKey = '';
+  if (settings.searchApiKeyEncrypted && safeStorage.isEncryptionAvailable()) {
+    try {
+      apiKey = safeStorage.decryptString(Buffer.from(settings.searchApiKeyEncrypted, 'base64'));
+    } catch {
+      apiKey = '';
+    }
+  }
+  return apiKey;
+}
+
 function sanitizeMediaDeviceId(value) {
   return String(value || '').trim().slice(0, 512);
+}
+
+function normalizeSearchProvider(value) {
+  const provider = String(value || '').trim().toLowerCase();
+  return Object.hasOwn(SEARCH_PROVIDERS, provider) ? provider : 'bocha';
 }
 
 function publicSettings(settings = readSettingsFile()) {
@@ -759,6 +785,11 @@ function publicSettings(settings = readSettingsFile()) {
     realtimeModelOptions: REALTIME_MODELS,
     realtimeVoiceOptions: REALTIME_VOICES,
     realtimeVadModeOptions: REALTIME_VAD_MODES,
+    webSearchEnabled: settings.webSearchEnabled === true,
+    searchProvider: normalizeSearchProvider(settings.searchProvider),
+    searchProviderOptions: Object.values(SEARCH_PROVIDERS).map(provider => ({ value: provider.id, label: provider.label })),
+    searchApiKey: decryptSearchApiKey(settings) ? SEARCH_API_KEY_MASK : '',
+    searchApiKeyConfigured: Boolean(decryptSearchApiKey(settings)),
     launchAtLogin: app.getLoginItemSettings().openAtLogin,
     restoreShortcut: sanitizeRestoreShortcut(settings.restoreShortcut),
     restoreShortcutOptions: ALLOWED_RESTORE_SHORTCUTS.map(value => ({ value, label: formatShortcutLabel(value) })),
@@ -887,6 +918,8 @@ function saveSettings(nextSettings) {
     realtimeModel: sanitizeRealtimeModel(nextSettings.realtimeModel),
     realtimeVoice: sanitizeRealtimeVoice(nextSettings.realtimeVoice),
     realtimeVadMode: sanitizeRealtimeVadMode(nextSettings.realtimeVadMode),
+    webSearchEnabled: nextSettings.webSearchEnabled === true,
+    searchProvider: normalizeSearchProvider(nextSettings.searchProvider),
     restoreShortcut: sanitizeRestoreShortcut(nextSettings.restoreShortcut),
     onboardingCompleted: current.onboardingCompleted === true,
     updateManifestUrl: String(nextSettings.updateManifestUrl || current.updateManifestUrl || '').trim().slice(0, 1000)
@@ -897,6 +930,14 @@ function saveSettings(nextSettings) {
       saved.apiKeyEncrypted = safeStorage.encryptString(nextSettings.apiKey).toString('base64');
     } else if (!nextSettings.apiKey) {
       delete saved.apiKeyEncrypted;
+    }
+  }
+
+  if (typeof nextSettings.searchApiKey === 'string' && nextSettings.searchApiKey !== SEARCH_API_KEY_MASK) {
+    if (nextSettings.searchApiKey && safeStorage.isEncryptionAvailable()) {
+      saved.searchApiKeyEncrypted = safeStorage.encryptString(nextSettings.searchApiKey).toString('base64');
+    } else if (!nextSettings.searchApiKey) {
+      delete saved.searchApiKeyEncrypted;
     }
   }
 
@@ -924,7 +965,10 @@ function saveSettings(nextSettings) {
     launchAtLogin: Boolean(nextSettings.launchAtLogin),
     restoreShortcut: saved.restoreShortcut,
     proactiveEnabled: saved.proactiveEnabled,
-    quietHoursEnabled: saved.quietHoursEnabled
+    quietHoursEnabled: saved.quietHoursEnabled,
+    webSearchEnabled: saved.webSearchEnabled,
+    searchProvider: saved.searchProvider,
+    searchApiKeyConfigured: Boolean(saved.searchApiKeyEncrypted)
   });
   return publicSettings(saved);
 }
@@ -1634,7 +1678,7 @@ async function requestLocalChat(message, history, images, systemPrompt) {
   return { text: text.trim(), mode: images.length ? 'local-vision' : 'local' };
 }
 
-function buildChatRequestContext(message, history, rawImages = []) {
+function buildChatRequestContext(message, history, rawImages = [], searchContext = '') {
   const settings = publicSettings();
   const apiKey = decryptApiKey();
   const memoryStore = readMemoryStore();
@@ -1646,7 +1690,7 @@ function buildChatRequestContext(message, history, rawImages = []) {
   const onlineReady = Boolean(settings.endpoint && settings.model && apiKey);
   const localSettings = readLocalAiSettings();
   const backend = chooseChatBackend(localSettings, onlineReady, images.length > 0);
-  const systemPrompt = `${SYSTEM_PROMPT}\n\n${buildMemoryPrompt(memoryStore)}\n\n${buildCompanionPrompt(companionStore, memoryStore.profile.displayName)}\n\n${buildLocalContext(plannerStore)}${knowledgeContext ? `\n\n${knowledgeContext}` : ''}`;
+  const systemPrompt = `${SYSTEM_PROMPT}\n\n${buildMemoryPrompt(memoryStore)}\n\n${buildCompanionPrompt(companionStore, memoryStore.profile.displayName)}\n\n${buildLocalContext(plannerStore)}${knowledgeContext ? `\n\n${knowledgeContext}` : ''}${searchContext ? `\n\n${searchContext}` : ''}`;
   return { settings, apiKey, memoryStore, plannerStore, images, backend, systemPrompt, history };
 }
 
@@ -1706,14 +1750,44 @@ function emitChatStreamEvent(sender, requestId, payload) {
   if (!sender.isDestroyed()) sender.send('chat:stream-event', { requestId, ...payload });
 }
 
+async function runChatWebSearch(entry, message) {
+  const settings = publicSettings();
+  const searchApiKey = decryptSearchApiKey(settings);
+  const configured = Boolean(settings.webSearchEnabled && searchApiKey && SEARCH_PROVIDERS[settings.searchProvider]);
+  if (!configured) {
+    if (entry?.sender && entry.webSearchRequested) {
+      emitChatStreamEvent(entry.sender, entry.requestId, { type: 'search', status: 'unavailable', error: '联网搜索未开启或未配置 API Key，请到设置中配置。' });
+    }
+    return { results: [], context: '' };
+  }
+  const query = buildSearchQuery(message) || String(message || '').trim().slice(0, 120);
+  if (!query) return { results: [], context: '' };
+  if (entry?.sender) emitChatStreamEvent(entry.sender, entry.requestId, { type: 'search', status: 'searching' });
+  const outcome = await requestWebSearch({ providerId: settings.searchProvider, apiKey: searchApiKey, query });
+  if (outcome.error || !outcome.results.length) {
+    if (entry?.sender) emitChatStreamEvent(entry.sender, entry.requestId, { type: 'search', status: 'failed', error: outcome.error || '没有找到相关结果。' });
+    return { results: [], context: '' };
+  }
+  if (entry?.sender) emitChatStreamEvent(entry.sender, entry.requestId, { type: 'search', status: 'done', count: outcome.results.length });
+  return { results: outcome.results, context: buildSearchContext(outcome.results) };
+}
+
+function appendSearchFootnote(text, results) {
+  const footnote = buildSourceFootnote(results);
+  return footnote ? `${text}\n\n${footnote}` : text;
+}
+
 async function executeChatStream(entry, payload) {
   const message = String(payload?.message || '').slice(0, 8000);
   const history = Array.isArray(payload?.history) ? payload.history : [];
-  const context = buildChatRequestContext(message, history, payload?.images);
+  entry.webSearchRequested = payload?.webSearch === true;
+  const keywordTriggered = publicSettings().webSearchEnabled && containsSearchIntent(message);
+  const search = entry.webSearchRequested || keywordTriggered ? await runChatWebSearch(entry, message) : { results: [], context: '' };
+  const context = buildChatRequestContext(message, history, payload?.images, search.context);
   emitChatStreamEvent(entry.sender, entry.requestId, { type: 'started', mode: context.backend });
   if (context.backend === 'rules') {
     if (context.images.length) throw new Error(localAiReady(readLocalAiSettings()) ? '本地图片理解需要选择匹配的 mmproj GGUF 文件；图片不会自动上传。' : '图片对话需要在线视觉模型，或本地多模态模型和 mmproj 文件。');
-    const text = offlineReply(message, context.memoryStore, context.plannerStore, searchKnowledge(readKnowledgeStore(), message, 5));
+    const text = search.results.length ? `当前没有可用模型进行归纳，以下是「${buildSearchQuery(message) || message.slice(0, 60)}」的联网搜索结果：\n\n${search.results.map((item, index) => `${index + 1}. ${item.title}\n${item.snippet || item.url}\n${item.url}`).join('\n\n')}` : offlineReply(message, context.memoryStore, context.plannerStore, searchKnowledge(readKnowledgeStore(), message, 5));
     emitChatStreamEvent(entry.sender, entry.requestId, { type: 'delta', text });
     emitChatStreamEvent(entry.sender, entry.requestId, { type: 'done', text, mode: 'offline', metrics: {} });
     return;
@@ -1722,15 +1796,16 @@ async function executeChatStream(entry, payload) {
     const timeout = setTimeout(() => { entry.timeout = true; entry.controller.abort(); }, 120000);
     try {
       const result = await requestLocalChatStream(message, history, context.images, context.systemPrompt, entry.controller, (text, metrics) => emitChatStreamEvent(entry.sender, entry.requestId, { type: 'delta', text, metrics }));
-      emitChatStreamEvent(entry.sender, entry.requestId, { type: 'done', ...result });
+      const done = { ...result, text: appendSearchFootnote(result.text, search.results) };
+      emitChatStreamEvent(entry.sender, entry.requestId, { type: 'done', ...done });
     } finally {
       clearTimeout(timeout);
     }
     return;
   }
-  const result = await requestChat(message, history, context.images);
+  const result = await requestChat(message, history, context.images, search.context);
   emitChatStreamEvent(entry.sender, entry.requestId, { type: 'delta', text: result.text });
-  emitChatStreamEvent(entry.sender, entry.requestId, { type: 'done', ...result, metrics: {} });
+  emitChatStreamEvent(entry.sender, entry.requestId, { type: 'done', ...result, text: appendSearchFootnote(result.text, search.results), metrics: {} });
 }
 
 function startChatStream(sender, payload) {
@@ -2233,7 +2308,7 @@ function offlineReply(message, memoryStore = readMemoryStore(), plannerStore = r
   return '我现在处于离线基础模式。请配置本地 GGUF 模型，或填写兼容接口地址、模型名称和 API Key，以启用完整对话。';
 }
 
-async function requestChat(message, history, rawImages = []) {
+async function requestChat(message, history, rawImages = [], searchContext = '') {
   const settings = publicSettings();
   const apiKey = decryptApiKey();
   const memoryStore = readMemoryStore();
@@ -2245,7 +2320,7 @@ async function requestChat(message, history, rawImages = []) {
   const onlineReady = Boolean(settings.endpoint && settings.model && apiKey);
   const localSettings = readLocalAiSettings();
   const backend = chooseChatBackend(localSettings, onlineReady, images.length > 0);
-  const systemPrompt = `${SYSTEM_PROMPT}\n\n${buildMemoryPrompt(memoryStore)}\n\n${buildCompanionPrompt(companionStore, memoryStore.profile.displayName)}\n\n${buildLocalContext(plannerStore)}${knowledgeContext ? `\n\n${knowledgeContext}` : ''}`;
+  const systemPrompt = `${SYSTEM_PROMPT}\n\n${buildMemoryPrompt(memoryStore)}\n\n${buildCompanionPrompt(companionStore, memoryStore.profile.displayName)}\n\n${buildLocalContext(plannerStore)}${knowledgeContext ? `\n\n${knowledgeContext}` : ''}${searchContext ? `\n\n${searchContext}` : ''}`;
   if (backend === 'local') return requestLocalChat(message, history, images, systemPrompt);
   if (backend === 'rules') {
     if (images.length) throw new Error(localAiReady(localSettings) ? '本地图片理解需要选择匹配的 mmproj GGUF 文件；图片不会自动上传。' : '图片对话需要在线视觉模型，或本地多模态模型和 mmproj 文件。');
@@ -2827,7 +2902,11 @@ ipcMain.handle('diagnostics:get', () => getDiagnostics());
 ipcMain.handle('diagnostics:export', () => exportDiagnostics());
 ipcMain.handle('app:restart-safe-mode', () => restartInMode(true));
 ipcMain.handle('app:restart-normal-mode', () => restartInMode(false));
-ipcMain.handle('chat:send', (_event, payload) => requestChat(String(payload?.message || '').slice(0, 8000), Array.isArray(payload?.history) ? payload.history : [], payload?.images));
+ipcMain.handle('chat:send', async (_event, payload) => {
+  const message = String(payload?.message || '').slice(0, 8000);
+  const search = payload?.webSearch === true ? await runChatWebSearch(null, message) : { results: [], context: '' };
+  return requestChat(message, Array.isArray(payload?.history) ? payload.history : [], payload?.images, search.context);
+});
 ipcMain.handle('chat:stream-start', (event, payload) => startChatStream(event.sender, payload || {}));
 ipcMain.handle('chat:stream-stop', (_event, requestId) => stopChatStream(requestId));
 ipcMain.handle('local-ai:get', () => localAiPublicState());
