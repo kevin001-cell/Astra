@@ -21,3 +21,6 @@ build/*.exe
 build/*.dll
 .DS_Store
 Thumbs.db
+
+# Claude Code local session
+.claude/
